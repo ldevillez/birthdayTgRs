@@ -4,11 +4,13 @@ use teloxide::{prelude2::*, utils::command::BotCommand};
 use std::error::Error;
 use serde;
 
+use tokio::runtime::Runtime;
+use tokio::time::{self, Duration};
+
 mod bth;
 
 mod database;
 
-use rusqlite::{Connection, Result, params};
 
 
 
@@ -69,6 +71,7 @@ async fn answer(
             //}
 
 
+            println!("Chat: {:?}", message.chat.id);
             bot.send_message(message.chat.id, format!("Bla Bla ")).await?
         }
     };
@@ -117,8 +120,21 @@ async fn main() {
     println!("Result: {:?}", result);
 
     println!("Starting bot...");
-    let bot = Bot::new(conf.bot_token).auto_send();
-    //teloxide::repls2::commands_repl(bot, answer, Command::ty()).await;
+    let bot = Bot::new(&conf.bot_token).auto_send();
+    tokio::spawn(async move {
+        let mut interval = time::interval(Duration::from_secs(5));
+        let bot_interval = Bot::new(&conf.bot_token).auto_send();
+
+        loop {
+            interval.tick().await;
+            let status = bot_interval.send_message(357669106, "Hey").await;
+            //TODO log status
+        }
+
+    });
+
+    //bot.send_message(357669106, "Hey").await;
+    teloxide::repls2::commands_repl(bot, answer, Command::ty()).await;
 }
 
 // TODO logging
