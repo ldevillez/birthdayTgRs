@@ -4,8 +4,9 @@ use teloxide::{prelude2::*, utils::command::BotCommand};
 use std::error::Error;
 use serde;
 
-use tokio::runtime::Runtime;
 use tokio::time::{self, Duration};
+
+use chrono::prelude::{DateTime, Local, Datelike};
 
 mod bth;
 
@@ -30,8 +31,12 @@ pub struct Conf {
 enum Command {
     #[command(description = "display this text.")]
     Help,
-    #[command(description = "List the following birthday")]
+    #[command(description = "List the following birthday with the following order")]
     Fetch,
+    #[command(description = "List the following birthday with alphabetical order")]
+    FetchAlpha,
+    #[command(description = "List the following birthday with date order")]
+    FetchOrder,
 }
 
 
@@ -47,43 +52,49 @@ async fn answer(
     match command {
         Command::Help => bot.send_message(message.chat.id, Command::descriptions()).await?,
         Command::Fetch => {
-
-            //let c = CONNECTION.lock().await;
-            //let mut statement = c.prepare(&format!("SELECT name, day, month, reminder FROM person WHERE user_id={}", 1))?;
-
-            //let mut stmt = conn.prepare(
-                //"SELECT name, day, month, reminder FROM person WHERE user_id = ?1"
-            //).unwrap();
-
-            //let bd_iter = stmt.query_map(&[&message.chat.id], |row| {
-                //Ok(Birthday {
-                    //name: row.get(0)?,
-                    //day: row.get(1)?,
-                    //month: row.get(2)?,
-                    //reminder: row.get(3)?,
-                //})
-            //});
-
-            //for person in bd_iter {
-                //for test in person {
-                    ////println!("Found person {:?}", test);
-                //}
-            //}
-
-
-            println!("Chat: {:?}", message.chat.id);
-            bot.send_message(message.chat.id, format!("Bla Bla ")).await?
+            let mut result = database::get_all_birthdays(message.chat.id).await.unwrap();
+            if result.len() == 0 {
+                bot.send_message(message.chat.id, "You have no reminder start by creating one").await?
+            } else {
+                let local: DateTime<Local> = Local::now();
+                bth::sort_bths_after_date(&mut result, local.month() as i32, local.day() as i32);
+                let mut msg: String = "You have the following birthdays:\n".to_owned();
+                for res in result {
+                    msg.push_str(&format!("- {}: {}/{}\n", res.name, res.month, res.day ));
+                }
+                bot.send_message(message.chat.id, msg).await?
+            }
+        }
+        Command::FetchAlpha => {
+            let mut result = database::get_all_birthdays(message.chat.id).await.unwrap();
+            if result.len() == 0 {
+                bot.send_message(message.chat.id, "You have no reminder start by creating one").await?
+            } else {
+                bth::sort_bths_name(&mut result);
+                let mut msg: String = "You have the following birthdays:\n".to_owned();
+                for res in result {
+                    msg.push_str(&format!("- {}: {}/{}\n", res.name, res.month, res.day ));
+                }
+                bot.send_message(message.chat.id, msg).await?
+            }
+        }
+        Command::FetchOrder => {
+            let mut result = database::get_all_birthdays(message.chat.id).await.unwrap();
+            if result.len() == 0 {
+                bot.send_message(message.chat.id, "You have no reminder start by creating one").await?
+            } else {
+                bth::sort_bths_date(&mut result);
+                let mut msg: String = "You have the following birthdays:\n".to_owned();
+                for res in result {
+                    msg.push_str(&format!("- {}: {}/{}\n", res.name, res.month, res.day ));
+                }
+                bot.send_message(message.chat.id, msg).await?
+            }
         }
     };
 
     Ok(())
 }
-
-//async fn connect_database() -> AsyncResult<()> {
-    //CONNECTION = Mutex::new(Connection::open("./birthday.db3").unwrap());
-
-    //Ok(())
-//}
 
 #[tokio::main]
 async fn main() {
@@ -103,21 +114,21 @@ async fn main() {
     //println!("User ID is {}",conf.user_id);
 
     let mut bth = bth::Birthday {
-        name: "test".to_owned(),
-        day: 0,
-        month: 1,
-        reminder: 2,
+        name: "Muncho".to_owned(),
+        day: 21,
+        month: 8,
+        reminder: 6,
         id: 3
     };
-    let status_db = database::create_birthday(10, &bth);
+    let status_db = database::create_birthday(357669106, &bth);
     status_db.await.expect("Could not add birthday");
-    bth.reminder = 4;
-    let status_db = database::edit_birthday(10, &bth);
-    status_db.await.expect("Could edit birthday");
-    let status_db = database::delete_birthday(10, 2);
-    status_db.await.expect("Could not delete birthday");
-    let result = database::get_all_birthdays(10).await.unwrap();
-    println!("Result: {:?}", result);
+    //bth.reminder = 4;
+    //let status_db = database::edit_birthday(10, &bth);
+    //status_db.await.expect("Could edit birthday");
+    //let status_db = database::delete_birthday(10, 2);
+    //status_db.await.expect("Could not delete birthday");
+    //let result = database::get_all_birthdays(10).await.unwrap();
+    //println!("Result: {:?}", result);
 
     println!("Starting bot...");
     let bot = Bot::new(&conf.bot_token).auto_send();
@@ -127,7 +138,7 @@ async fn main() {
 
         loop {
             interval.tick().await;
-            let status = bot_interval.send_message(357669106, "Hey").await;
+            //let status = bot_interval.send_message(357669106, "Hey").await;
             //TODO log status
         }
 
