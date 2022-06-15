@@ -48,3 +48,85 @@ pub fn compare_bth_date(a: &Birthday, month: i32, day: i32) -> std::cmp::Orderin
         comp_m
     }
 }
+
+// Put inside struct
+pub fn check_bth(a: &Birthday) -> bool {
+    match a.month {
+        1 => {
+            if a.day > 31 {
+                return false
+            }
+        }
+        2 => {
+            if a.day > 29 {
+                return false
+            }
+        }
+        3 => {
+            if a.day > 31 {
+                return false
+            }
+        }
+        4 => {
+            if a.day > 30 {
+                return false
+            }
+        }
+        5 => {
+            if a.day > 31 {
+                return false
+            }
+        }
+        6 => {
+            if a.day > 30 {
+                return false
+            }
+        }
+        7 => {
+            if a.day > 31 {
+                return false
+            }
+        }
+        8 => {
+            if a.day > 31 {
+                return false
+            }
+        }
+        9 => {
+            if a.day > 30 {
+                return false
+            }
+        }
+        10 => {
+            if a.day > 31 {
+                return false
+            }
+        }
+        11 => {
+            if a.day > 30 {
+                return false
+            }
+        }
+        12 => {
+            if a.day > 31 {
+                return false
+            }
+        }
+        _ => {
+            return false
+        }
+    }
+    if a.day < 0 {
+        return false
+    }
+
+    if a.reminder < 0 {
+        return false
+    }
+
+    if a.name.is_empty() {
+        return false
+    }
+
+    true
+}

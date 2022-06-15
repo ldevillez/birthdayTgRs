@@ -26,8 +26,8 @@ pub struct Conf {
 
 
 
-#[derive(BotCommand, Clone)]
-#[command(rename = "lowercase", description = "These commands are supported:")]
+#[derive(BotCommand, Clone, PartialEq)]
+#[command(rename = "lowercase", description = "These commands are supported:", parse_with="split")]
 enum Command {
     #[command(description = "display this text.")]
     Help,
@@ -37,6 +37,10 @@ enum Command {
     FetchAlpha,
     #[command(description = "List the following birthday with date order")]
     FetchOrder,
+    #[command(description = "Add a birthday: name, month, day, reminder offset")]
+    Add(String,i32,i32,i32),
+    #[command(description = "Delete a birthday: id")]
+    Delete(i32),
 }
 
 
@@ -52,7 +56,7 @@ async fn answer(
     match command {
         Command::Help => bot.send_message(message.chat.id, Command::descriptions()).await?,
         Command::Fetch => {
-            let mut result = database::get_all_birthdays(message.chat.id).await.unwrap();
+            let mut result = database::get_all_birthdays(message.chat.id as i32).await.unwrap();
             if result.len() == 0 {
                 bot.send_message(message.chat.id, "You have no reminder start by creating one").await?
             } else {
@@ -60,36 +64,69 @@ async fn answer(
                 bth::sort_bths_after_date(&mut result, local.month() as i32, local.day() as i32);
                 let mut msg: String = "You have the following birthdays:\n".to_owned();
                 for res in result {
-                    msg.push_str(&format!("- {}: {}/{}\n", res.name, res.month, res.day ));
+                    msg.push_str(&format!("- {}: {}/{} (id: {})\n", res.name, res.month, res.day, res.id ));
                 }
                 bot.send_message(message.chat.id, msg).await?
             }
         }
         Command::FetchAlpha => {
-            let mut result = database::get_all_birthdays(message.chat.id).await.unwrap();
+            let mut result = database::get_all_birthdays(message.chat.id as i32).await.unwrap();
             if result.len() == 0 {
                 bot.send_message(message.chat.id, "You have no reminder start by creating one").await?
             } else {
                 bth::sort_bths_name(&mut result);
                 let mut msg: String = "You have the following birthdays:\n".to_owned();
                 for res in result {
-                    msg.push_str(&format!("- {}: {}/{}\n", res.name, res.month, res.day ));
+                    msg.push_str(&format!("- {}: {}/{} (id: {})\n", res.name, res.month, res.day, res.id ));
                 }
                 bot.send_message(message.chat.id, msg).await?
             }
         }
         Command::FetchOrder => {
-            let mut result = database::get_all_birthdays(message.chat.id).await.unwrap();
+            let mut result = database::get_all_birthdays(message.chat.id as i32).await.unwrap();
             if result.len() == 0 {
                 bot.send_message(message.chat.id, "You have no reminder start by creating one").await?
             } else {
                 bth::sort_bths_date(&mut result);
                 let mut msg: String = "You have the following birthdays:\n".to_owned();
                 for res in result {
-                    msg.push_str(&format!("- {}: {}/{}\n", res.name, res.month, res.day ));
+                    msg.push_str(&format!("- {}: {}/{} (id: {})\n", res.name, res.month, res.day, res.id ));
                 }
                 bot.send_message(message.chat.id, msg).await?
             }
+        }
+        Command::Add(name, month, day, reminder) => {
+            let bth = bth::Birthday {
+                name: name,
+                day: day,
+                month: month,
+                reminder: reminder,
+                id: 0
+            };
+            if !bth::check_bth(&bth){
+                bot.send_message(message.chat.id,"Could not parse to a valid birthday").await?
+            }  else {
+                let status_db = database::create_birthday(message.chat.id as i32, &bth);
+
+                let mut msg: String = "".to_owned();
+                match status_db.await {
+                    Ok(_result) => msg.push_str("Birthady added !"),
+                    Err(_e) => msg.push_str("Could not add Birthday to database")
+                };
+                bot.send_message(message.chat.id,msg).await?
+            }
+        }
+
+
+        Command::Delete(id) => {
+            let status_db = database::delete_birthday(message.chat.id as i32, id);
+
+            let mut msg: String = "".to_owned();
+            match status_db.await {
+                Ok(_result) => msg.push_str(&format!("Birthady (id: {}) deleted !", id)),
+                Err(_e) => msg.push_str(&format!("Could not delete Birthday (id: {})",id))
+            };
+            bot.send_message(message.chat.id,msg).await?
         }
     };
 
