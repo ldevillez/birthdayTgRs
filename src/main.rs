@@ -12,6 +12,8 @@ mod bth;
 
 mod database;
 
+mod user_config;
+
 
 
 
@@ -41,6 +43,10 @@ enum Command {
     Add(String,i32,i32,i32),
     #[command(description = "Delete a birthday: id")]
     Delete(i32),
+    #[command(description = "Get your user config")]
+    FetchConfig,
+    #[command(description = "Update your user config: hour minute")]
+    UpdateConfig(i32, i32),
 }
 
 
@@ -64,7 +70,7 @@ async fn answer(
                 bth::sort_bths_after_date(&mut result, local.month() as i32, local.day() as i32);
                 let mut msg: String = "You have the following birthdays:\n".to_owned();
                 for res in result {
-                    msg.push_str(&format!("- {}: {}/{} (id: {})\n", res.name, res.month, res.day, res.id ));
+                    msg.push_str(&format!("- {}: {:0>2}/{:0>2} (id: {})\n", res.name, res.day, res.month, res.id ));
                 }
                 bot.send_message(message.chat.id, msg).await?
             }
@@ -77,7 +83,7 @@ async fn answer(
                 bth::sort_bths_name(&mut result);
                 let mut msg: String = "You have the following birthdays:\n".to_owned();
                 for res in result {
-                    msg.push_str(&format!("- {}: {}/{} (id: {})\n", res.name, res.month, res.day, res.id ));
+                    msg.push_str(&format!("- {}: {:0>2}/{:0>2} (id: {})\n", res.name, res.day, res.month, res.id ));
                 }
                 bot.send_message(message.chat.id, msg).await?
             }
@@ -90,12 +96,12 @@ async fn answer(
                 bth::sort_bths_date(&mut result);
                 let mut msg: String = "You have the following birthdays:\n".to_owned();
                 for res in result {
-                    msg.push_str(&format!("- {}: {}/{} (id: {})\n", res.name, res.month, res.day, res.id ));
+                    msg.push_str(&format!("- {}: {:0>2}/{:0>2} (id: {})\n", res.name, res.day, res.month, res.id ));
                 }
                 bot.send_message(message.chat.id, msg).await?
             }
         }
-        Command::Add(name, month, day, reminder) => {
+        Command::Add(name, day, month, reminder) => {
             let bth = bth::Birthday {
                 name: name,
                 day: day,
@@ -109,6 +115,21 @@ async fn answer(
                 let status_db = database::create_birthday(message.chat.id as i32, &bth);
 
                 let mut msg: String = "".to_owned();
+                let conf = database::get_config(message.chat.id as i32).await;
+                match conf {
+                    Ok(_) => {
+                        //Has conf, do nothing
+                    },
+                    Err(_) => {
+                        let myconf = user_config::UserConfig{
+                            hour: 9,
+                            minute: 0
+                        };
+                        let _res = database::create_config(message.chat.id as i32,&myconf).await;
+                        msg.push_str("Creating user config ! \n");
+                    }
+                }
+
                 match status_db.await {
                     Ok(_result) => msg.push_str("Birthady added !"),
                     Err(_e) => msg.push_str("Could not add Birthday to database")
@@ -126,6 +147,63 @@ async fn answer(
                 Ok(_result) => msg.push_str(&format!("Birthady (id: {}) deleted !", id)),
                 Err(_e) => msg.push_str(&format!("Could not delete Birthday (id: {})",id))
             };
+            bot.send_message(message.chat.id,msg).await?
+        }
+
+        Command::FetchConfig => {
+            let mut msg: String = "".to_owned();
+            let conf = database::get_config(message.chat.id as i32).await;
+            match conf {
+                Ok(myconf) => {
+                    msg.push_str(&format!("Your reminder is scheduled for {:0>2}h{:0>2}", myconf.hour, myconf.minute));
+                },
+                Err(_) => {
+                    msg.push_str("You have no user config");
+                }
+            }
+            bot.send_message(message.chat.id,msg).await?
+        }
+        Command::UpdateConfig(hour, minute) => {
+            let mut msg: String = "".to_owned();
+            let conf = database::get_config(message.chat.id as i32).await;
+            match conf {
+                Ok(mut myconf) => {
+                    myconf.hour = hour;
+                    myconf.minute = minute;
+                    if user_config::check_user_config(&myconf) {
+                        let res = database::create_config(message.chat.id as i32,&myconf).await;
+                        match res {
+                            Ok(_) => {
+                                msg.push_str("Your config is updated!");
+                            },
+                            Err(_) => {
+                                msg.push_str("Error creating your config");
+                            }
+                        }
+                    } else {
+                        msg.push_str("Your config is not valid");
+                    }
+                },
+                Err(_) => {
+                    let myconf = user_config::UserConfig{
+                        hour: hour,
+                        minute: minute,
+                    };
+                    if user_config::check_user_config(&myconf) {
+                        let res = database::create_config(message.chat.id as i32,&myconf).await;
+                        match res {
+                            Ok(_) => {
+                                msg.push_str("Your config is created!");
+                            },
+                            Err(_) => {
+                                msg.push_str("Error creating your config");
+                            }
+                        }
+                    } else {
+                        msg.push_str("Your config is not valid");
+                    }
+                }
+            }
             bot.send_message(message.chat.id,msg).await?
         }
     };

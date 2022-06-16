@@ -7,6 +7,7 @@ use rusqlite::{Connection, Result, params};
 type AsyncResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 
 use crate::bth;
+use crate::user_config;
 
 lazy_static! {
     static ref CONNECTION: Mutex<Connection> = Mutex::new(Connection::open("./birthday.db3").unwrap());
@@ -22,6 +23,15 @@ pub async fn initialize_database() -> AsyncResult<()> {
             day      INTEGER,
             month    INTEGER,
             reminder INTEGER
+        )",
+        [], // empty list of parameters.
+    )?;
+  CONNECTION.lock().await.execute(
+        "CREATE TABLE IF NOT EXISTS config (
+            id       INTEGER PRIMARY KEY,
+            user_id  INTEGER,
+            hour     INTERER,
+            minute      INTEGER
         )",
         [], // empty list of parameters.
     )?;
@@ -62,6 +72,30 @@ pub async fn delete_birthday(user_id: i32, id: i32) -> AsyncResult<()>{
 
 pub async fn edit_birthday(user_id: i32, birthday: &bth::Birthday) -> AsyncResult<()>{
     CONNECTION.lock().await.execute("UPDATE person SET name = ?1, day = ?2, month = ?3, reminder=?4 WHERE id = ?5 AND user_id = ?6", params![birthday.name, birthday.day, birthday.month, birthday.reminder, birthday.id,user_id],)?;
+
+    Ok(())
+}
+
+pub async fn get_config(user_id: i32) -> AsyncResult<user_config::UserConfig>{
+    let c = CONNECTION.lock().await;
+    let mut statement = c.prepare(&format!("SELECT hour, minute FROM config WHERE user_id ={}", user_id))?;
+    Ok(statement.query_row([],|row| {
+        //println!("Loadead, {:?}",row.get(0));
+        Ok(user_config::UserConfig {
+            hour: row.get(0)?,
+            minute: row.get(1)?,
+        })
+    })?)
+}
+
+pub async fn edit_config(user_id: i32, config: &user_config::UserConfig) -> AsyncResult<()>{
+    CONNECTION.lock().await.execute("UPDATE config SET hour = ?1, minute = ?2 WHERE user_id = ?3", params![config.hour, config.minute, user_id],)?;
+
+    Ok(())
+}
+
+pub async fn create_config(user_id: i32, config: &user_config::UserConfig) -> AsyncResult<()>{
+    CONNECTION.lock().await.execute("INSERT INTO config (hour, minute, user_id) VALUES (?1, ?2, ?3)", params![config.hour, config.minute, user_id],)?;
 
     Ok(())
 }
