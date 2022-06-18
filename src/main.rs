@@ -9,11 +9,9 @@ use tokio::time::{self, Duration};
 use chrono::prelude::{DateTime, Local, Datelike};
 
 mod bth;
-
 mod database;
-
 mod user_config;
-
+mod mytime;
 
 
 
@@ -70,7 +68,7 @@ async fn answer(
                 bth::sort_bths_after_date(&mut result, local.month() as i32, local.day() as i32);
                 let mut msg: String = "You have the following birthdays:\n".to_owned();
                 for res in result {
-                    msg.push_str(&format!("- {}: {:0>2}/{:0>2} (id: {})\n", res.name, res.day, res.month, res.id ));
+                    msg.push_str(&format!("- {}: {:0>2}/{:0>2} (id: {}) (reminder: {})\n", res.name, res.day, res.month, res.id, res.reminder ));
                 }
                 bot.send_message(message.chat.id, msg).await?
             }
@@ -83,7 +81,7 @@ async fn answer(
                 bth::sort_bths_name(&mut result);
                 let mut msg: String = "You have the following birthdays:\n".to_owned();
                 for res in result {
-                    msg.push_str(&format!("- {}: {:0>2}/{:0>2} (id: {})\n", res.name, res.day, res.month, res.id ));
+                    msg.push_str(&format!("- {}: {:0>2}/{:0>2} (id: {}) (reminder: {})\n", res.name, res.day, res.month, res.id, res.reminder ));
                 }
                 bot.send_message(message.chat.id, msg).await?
             }
@@ -96,7 +94,7 @@ async fn answer(
                 bth::sort_bths_date(&mut result);
                 let mut msg: String = "You have the following birthdays:\n".to_owned();
                 for res in result {
-                    msg.push_str(&format!("- {}: {:0>2}/{:0>2} (id: {})\n", res.name, res.day, res.month, res.id ));
+                    msg.push_str(&format!("- {}: {:0>2}/{:0>2} (id: {}) (reminder: {})\n", res.name, res.day, res.month, res.id, res.reminder ));
                 }
                 bot.send_message(message.chat.id, msg).await?
             }
@@ -248,12 +246,29 @@ async fn main() {
     println!("Starting bot...");
     let bot = Bot::new(&conf.bot_token).auto_send();
     tokio::spawn(async move {
-        let mut interval = time::interval(Duration::from_secs(5));
+        let mut interval = time::interval(Duration::from_secs(30));
         let bot_interval = Bot::new(&conf.bot_token).auto_send();
+        let mut previous = mytime::get_mytime_from_time();
+        interval.tick().await;
 
         loop {
+            println!("Hello !");
             interval.tick().await;
-            //let status = bot_interval.send_message(357669106, "Hey").await;
+            let current = mytime::get_mytime_from_time();
+            let ids:Vec<i32> = database::get_all_config(&previous,&current).await.unwrap();
+            for id in ids {
+                let mut vec_bth = bth::get_reminded_birthday(id).await;
+                if vec_bth.len() > 0 {
+                    let mut msg: String = "Your comming soon birthdays:\n".to_owned();
+                    bth::sort_bths_name(&mut vec_bth);
+                    for bt in vec_bth {
+                        msg.push_str(&format!("- {}: {:0>2}/{:0>2} (id: {}) (reminder: {})\n", bt.name, bt.day, bt.month, bt.id, bt.reminder ));
+
+                    }
+                    let status = bot_interval.send_message(id as i64, msg).await;
+                }
+            }
+            previous = current;
             //TODO log status
         }
 
@@ -261,6 +276,6 @@ async fn main() {
 
     //bot.send_message(357669106, "Hey").await;
     teloxide::repls2::commands_repl(bot, answer, Command::ty()).await;
-}
 
 // TODO logging
+}

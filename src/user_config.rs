@@ -12,7 +12,7 @@ pub fn check_user_config(a: &UserConfig) -> bool {
     if a.hour < 0 || a.hour > 23{
         return false
     }
-    if a.minute < 0 || a.minute > 23{
+    if a.minute < 0 || a.minute > 59{
         return false
     }
 

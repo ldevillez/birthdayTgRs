@@ -8,6 +8,7 @@ type AsyncResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 
 use crate::bth;
 use crate::user_config;
+use crate::mytime;
 
 lazy_static! {
     static ref CONNECTION: Mutex<Connection> = Mutex::new(Connection::open("./birthday.db3").unwrap());
@@ -98,4 +99,30 @@ pub async fn create_config(user_id: i32, config: &user_config::UserConfig) -> As
     CONNECTION.lock().await.execute("INSERT INTO config (hour, minute, user_id) VALUES (?1, ?2, ?3)", params![config.hour, config.minute, user_id],)?;
 
     Ok(())
+}
+
+pub async fn get_all_config(prev: &mytime::time, curr: &mytime::time) -> AsyncResult<Vec<i32>> {
+    let mut uconf_ids: Vec<i32> = Vec::new();
+    let c = CONNECTION.lock().await;
+    let mut statement = c.prepare("SELECT hour, minute, user_id FROM config")?;
+    let conf_map = statement.query_map([], |row| {
+        let conf_time = mytime::time {
+            hour: row.get(0)?,
+            minute: row.get(1)?
+        };
+        if mytime::between_time(&prev, &curr, &conf_time) {
+            Ok(row.get(2)?)
+        } else {
+            Ok(-1)
+        }
+
+    })?;
+    for id in conf_map {
+        let i = id.unwrap();
+        if i != -1 {
+            uconf_ids.push(i);
+        }
+    }
+    Ok(uconf_ids)
+
 }

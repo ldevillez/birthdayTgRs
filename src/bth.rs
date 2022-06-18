@@ -1,3 +1,7 @@
+use chrono::prelude::{DateTime, Local, Datelike};
+use chrono::Duration;
+
+
 #[derive(Debug)]
 pub struct Birthday {
     pub name: String,
@@ -6,6 +10,8 @@ pub struct Birthday {
     pub reminder: i32,
     pub id: i32,
 }
+
+use crate::database;
 
 pub fn sort_bths_name(bths: &mut Vec<Birthday>) -> () {
     bths.sort_by(|a, b| a.name.to_ascii_uppercase().cmp(&b.name.to_ascii_uppercase()));
@@ -129,4 +135,19 @@ pub fn check_bth(a: &Birthday) -> bool {
     }
 
     true
+}
+
+pub async fn get_reminded_birthday(user_id: i32) -> Vec<Birthday> {
+    let vec_bth: Vec<Birthday> = database::get_all_birthdays(user_id).await.unwrap();
+    let mut output_vec: Vec<Birthday> = Vec::new();
+    let today: DateTime<Local> = Local::now();
+
+    for bt in vec_bth {
+        let future = today + Duration::days(bt.reminder as i64);
+        if compare_bth_date(&bt, today.month() as i32, today.day() as i32) != std::cmp::Ordering::Less && compare_bth_date(&bt, future.month() as i32, future.day() as i32) != std::cmp::Ordering::Greater {
+            output_vec.push(bt);
+        }
+    }
+
+    output_vec
 }
